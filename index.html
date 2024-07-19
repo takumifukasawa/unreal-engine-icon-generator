@@ -1,0 +1,183 @@
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>unreal-engine-icon-generator</title>
+    <style>
+        * {
+            font-family: sans-serif;
+        }
+        
+        p {
+            font-size: 13px;
+        }
+
+        .drop-area {
+            background-color: #f4f4f4;
+            margin: 8px;
+            padding: 8px;
+            border: #ccc dashed 8px;
+            min-height: 160px;
+        }
+        .drop-area.dropping {
+            background-color: #dddddd;
+        }
+        
+        .preview-area { 
+        }
+        
+        .preview-image {
+            max-height: 128px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Unreal Engine Icon Generator</h1>
+    <div>
+        <form id="js-form">
+            <div id="js-drop-area" class="drop-area">
+                <p>drag and drop<br />or</p>
+                <p>
+                    <input id="js-input-file-button" class="input-file-button" type="file" accept="image/*" value="select image"
+                           name="image">
+                </p>
+            </div>
+        </form>
+    </div>
+    <div class="preview-area">
+        <h3>Preview Info</h3>
+        <p>output file name prefix: <span id="preview-original-file-name"></span></p>
+        <img id="js-preview-image" class="preview-image" alt=""/>
+    </div>
+    <hr/>
+    <div>
+        <h4>Android Icons (36x36,48x48,72x72,96x96)</h4>
+        <input id="js-download-for-android" type="button" value="download zip" />
+    </div>
+
+    <script type="module">
+        import { downloadZip } from "https://cdn.jsdelivr.net/npm/client-zip/index.js";
+        
+        const ANDROID_ICON_SIZES = [36, 48, 72, 96];
+
+        const dropArea = document.getElementById("js-drop-area");
+        const inputFile = document.getElementById("js-input-file-button");
+        const previewImage = document.getElementById("js-preview-image");
+        const previewOriginalFileName = document.getElementById("preview-original-file-name");
+        const downloadForAndroidButton = document.getElementById("js-download-for-android");
+        const resizeCanvas = document.createElement("canvas");
+        const resizeContext = resizeCanvas.getContext("2d");
+        
+        let originalFileName;
+
+        /**
+         * 
+         * @param image
+         * @param size
+         * @param prefixFileName
+         * @returns {Promise<{fileName: string, blob: unknown}>}
+         */
+        const resizeImage = async (image, size, prefixFileName) => {
+            resizeCanvas.width = size;
+            resizeCanvas.height = size;
+            resizeContext.drawImage(image, 0, 0, size, size);
+            const blob = await new Promise(resolve => resizeCanvas.toBlob(resolve));
+            const fileName = `${prefixFileName}_${size}.png`;
+            return {
+                fileName,
+                blob
+            }
+        };
+
+        /**
+         * 
+         * @param file
+         */
+        const updatePreviewImageInfo = (file) => {
+            console.log("file", file)
+            if (!file) {
+                console.error("invalid file");
+                return;
+            }
+            const fileReader = new FileReader();
+            fileReader.onload = () => {
+                originalFileName = file.name.split(".")[0]; // cheap way to get file name without extension
+                previewImage.setAttribute("src", fileReader.result);
+                previewOriginalFileName.textContent = originalFileName;
+                console.log("========================");
+                console.log("originalFileName", originalFileName);
+                console.log("========================");
+            };
+            fileReader.readAsDataURL(file);
+        };
+
+        /**
+         * 
+         * @param data
+         * @returns {Promise<void>}
+         */
+        const internalDownloadZip = async (data) => {
+            const zipBlob = await downloadZip(data).blob();
+            const zipLink = document.createElement("a");
+            zipLink.href = window.URL.createObjectURL(zipBlob);
+            zipLink.download = `${originalFileName}-android.zip`;
+            zipLink.click();
+            zipLink.remove();
+        }
+
+        /**
+         * 
+         * @returns {Promise<void>}
+         */
+        const downloadForAndroid = async () => {
+            const introList = await Promise.all(ANDROID_ICON_SIZES.map(async size => await resizeImage(previewImage, size, originalFileName)))
+                .then(results => {
+                    return results.map(({ fileName, blob }) => ({
+                            name: fileName,
+                            lastModified: new Date(),
+                            input: blob,
+                        }
+                    ))
+                });
+            await internalDownloadZip(introList);
+        };
+
+        /**
+         * 
+         */
+        const main = () => {
+            dropArea.addEventListener("dragover", (e) => {
+                e.preventDefault();
+                dropArea.classList.add("dropping");
+            });
+            dropArea.addEventListener("drop", (e) => {
+                e.preventDefault();
+                const files = e.dataTransfer.files;
+                inputFile.files = files;
+                const file = files[0];
+                if (!!file) {
+                    updatePreviewImageInfo(file);
+                }
+            });
+            dropArea.addEventListener("dragleave", (e) => {
+                e.preventDefault();
+                dropArea.classList.remove("dropping");
+            });
+    
+            inputFile.addEventListener("change", (e) => {
+                const file = e.target.files[0];
+                if (!!file) {
+                    updatePreviewImageInfo(file);
+                }
+            });
+            
+            downloadForAndroidButton.addEventListener("click", downloadForAndroid);
+        };
+        
+        // -------------------------------------------------------------------------
+        
+        main();
+        
+    </script>
+
+</body>
+</html>
